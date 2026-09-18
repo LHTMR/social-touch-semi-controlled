@@ -327,7 +327,7 @@ def videos_for_touch(df_orig, interp_cells, touch, tid, out_dir, block, fps,
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--data-dir", type=Path, default=Path("data/2022-06-14_ST13-01"))
+    ap.add_argument("--data-dir", type=Path, default=Path("data/2022-06-14_ST13-01/blocks"))
     ap.add_argument("--interp-dir", type=Path, default=Path("output"))
     ap.add_argument("--video-dir", type=Path, default=Path("plot/videos"))
     ap.add_argument("--n-touches", type=int, default=5)
@@ -343,7 +343,9 @@ def main(argv=None) -> int:
     args.video_dir.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(args.seed)
 
-    inputs = sorted(args.data_dir.glob("*_merged_data.csv"))
+    # "*_merged_data*.csv" so both the original blocks/ naming and the newer
+    # blocks_rf_centered/ "..._merged_data_pca-xyz.csv" are picked up.
+    inputs = sorted(args.data_dir.glob("*_merged_data*.csv"))
     for input_csv in inputs:
         interp_csv = args.interp_dir / f"{input_csv.stem}_contact-interpolated.csv"
         if not interp_csv.exists():

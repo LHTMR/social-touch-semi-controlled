@@ -32,9 +32,15 @@ surface** (kNN-graph geodesics), so no interpolated point leaves the forearm.
 ## Layout & what's committed
 ```
 code/    the tool + the two verification scripts        (committed)
-data/    2022-06-14_ST13-01/ example session            (committed, ~54 MB incl. inputs)
+data/    2022-06-14_ST13-01/                            example session
+           blocks/              4x *_merged_data.csv           <- what the tool reads
+           blocks_rf_centered/  4x *_merged_data_pca-xyz.csv   + *_contact_depth_field_pca-xyz.parquet
+           forearm_pointclouds/ *_unified_registered.ply (the scaffold)
 plot/    verification PNGs                               (committed, small)
 ```
+The block CSVs used to sit directly in the session folder; they moved into
+`blocks/` on 2026-09-17, which is why `--data-dir` defaults to
+`data/2022-06-14_ST13-01/blocks`.
 Git-ignored (regenerable — do NOT commit, they are large): `output/` (interpolated
 CSVs, ~1.5 GB) and `plot/videos/` (~11 MB of mp4s).
 
@@ -69,7 +75,7 @@ PY="D:/conda_envs/social-touch/python.exe"
 # interpolate (all 4 example blocks) — ~9 min, all-pairs geodesics + dense patches
 $PY code/interpolate_contact_points.py \
     --ply data/2022-06-14_ST13-01/forearm_pointclouds/2022-06-14_ST13-01_unified_registered.ply \
-    --contacts data/2022-06-14_ST13-01/*_merged_data.csv --outdir output --max-gap 50
+    --contacts data/2022-06-14_ST13-01/blocks/*_merged_data.csv --outdir output --max-gap 50
 $PY code/interpolate_test.py     # plot/*.png  (3x2 per block: original vs interpolated)
 $PY code/interpolate_video.py    # plot/videos/*.mp4  (3D evolution, original vs interp)
 ```
@@ -91,6 +97,36 @@ $PY code/interpolate_video.py    # plot/videos/*.mp4  (3D evolution, original vs
   pre-cluster code path, bit-for-bit (verified on 12.6k rows). Detection agrees with
   `contact_area_metadata` on all 4 example blocks; that column is logged as a
   cross-check but never drives the algorithm. Override: `--contact-mode single|multi`.
+- **`blocks_rf_centered/`** (added 2026-09-17) — run `code/inspect_rf_centered.py` to
+  re-derive all of this. Per block: a `*_merged_data_pca-xyz.csv` and a
+  `*_contact_depth_field_pca-xyz.parquet`.
+  - The CSV has the **same 32 columns** as `blocks/`, same row count, nothing added or
+    removed. Only the **13 spatial** columns differ (3 `contact_location_*`, 9
+    `sticker_*`, and `contact_points`); the other 19 — including `contact_depth`,
+    `contact_area`, all timing, nerve and metadata columns — are byte-identical.
+  - Those coordinates are **not** the old ones rotated: pairwise distances within a
+    frame shift by ~0.4–1.0 mm median (up to 8 mm), and 11–32 % of the new
+    `contact_points` are exact duplicates. The contacts were re-projected onto a
+    deduplicated forearm (`dedup_epsilon` 0.5), not just moved to a new frame.
+  - **The tool cannot read these yet.** They sit ~930 mm from
+    `_unified_registered.ply`; `vertex_id` indexes `2022-06-14_ST13-01_forearm.ply`
+    (1807 vertices, `coordinate_space=pca_calibrated`) which is **not in this repo**.
+    The old `blocks/` CSVs still snap to the registered PLY at 0.56 mm median.
+  - Despite the folder name, all four blocks declare `coordinate_space=pca_calibrated`,
+    not `rf_centered` — read the metadata, never the directory name.
+- **Depth field parquet** (`schema_version 2`, `sign_convention=negative_is_penetrating`).
+  Long form, one row per contact sample: `frame_index, time_s, x, y, z,
+  signed_depth_mm, vertex_id`. It agrees exactly with the CSV — same contacting
+  frames, same per-frame point counts, same positions within the CSV's 0.1 mm
+  rounding — and `contact_depth` in the CSV is *exactly* `-min(signed_depth_mm)` per
+  frame (residual 0.000000 mm). So the parquet is the CSV's scalar depth resolved per
+  contact point, plus full float precision and vertex identity.
+  - **Caveat:** `(frame_index, vertex_id)` is **not unique**, contradicting the
+    "one row per (frame, contact vertex)" contract in `plot_contact_depth_field.py`.
+    8–19 % of pairs repeat (up to 5x), at identical x/y/z but **different** depths
+    (spread up to 7 mm). Reading it as one-value-per-vertex silently takes whichever
+    row comes last — the viewer overplots them. Aggregate explicitly (e.g. `min`)
+    before treating `vertex_id` as a key.
 - **Output** = 2 columns: `time_nerve` (dense, for aligning to the nerve signal) +
   `contact_points_interpolated`. Same row count as input. Anchor (measured) rows keep
   the **original** contacts; only interpolated in-between rows are snapped to the cloud.

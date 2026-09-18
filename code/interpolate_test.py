@@ -237,7 +237,7 @@ def render_block(input_csv: Path, interp_csv: Path, n_touches: int,
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--data-dir", type=Path, default=Path("data/2022-06-14_ST13-01"))
+    ap.add_argument("--data-dir", type=Path, default=Path("data/2022-06-14_ST13-01/blocks"))
     ap.add_argument("--interp-dir", type=Path, default=Path("output"))
     ap.add_argument("--plot-dir", type=Path, default=Path("plot"))
     ap.add_argument("--n-touches", type=int, default=3)
@@ -249,9 +249,11 @@ def main(argv=None) -> int:
     args.plot_dir.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(args.seed)
 
-    inputs = sorted(args.data_dir.glob("*_merged_data.csv"))
+    # "*_merged_data*.csv" so both the original blocks/ naming and the newer
+    # blocks_rf_centered/ "..._merged_data_pca-xyz.csv" are picked up.
+    inputs = sorted(args.data_dir.glob("*_merged_data*.csv"))
     if not inputs:
-        logger.error("No *_merged_data.csv in %s", args.data_dir)
+        logger.error("No *_merged_data*.csv in %s", args.data_dir)
         return 1
 
     for input_csv in inputs:

@@ -12,7 +12,10 @@ so no interpolated contact can fall outside the point-cloud domain or cut throug
 
 ```
 code/   interpolate_contact_points.py   the tool
-data/   2022-06-14_ST13-01/             example session (forearm PLYs)
+data/   2022-06-14_ST13-01/             example session
+          blocks/                       the merged block CSVs the tool reads
+          blocks_rf_centered/           receptive-field-centred variant (PCA space)
+          forearm_pointclouds/          the scaffold PLY
 plot/   (visualisations, added later)
 ```
 
@@ -90,7 +93,7 @@ unified file is the registered forearm-of-reference for the whole session.
 ```bash
 python code/interpolate_contact_points.py \
     --ply      data/2022-06-14_ST13-01/forearm_pointclouds/2022-06-14_ST13-01_unified_registered.ply \
-    --contacts path/to/block-order01_merged.csv path/to/block-order02_merged.csv \
+    --contacts data/2022-06-14_ST13-01/blocks/*_merged_data.csv \
     --outdir   out/
 ```
 
