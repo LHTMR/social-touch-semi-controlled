@@ -30,7 +30,7 @@ import pandas as pd
 import pyarrow.parquet as pq
 from scipy.spatial import cKDTree
 
-from interpolate_contact_points import parse_contact_points
+from surface_morph import parse_contact_points
 
 RULE = "=" * 78
 # The CSV serialises coordinates at 1 decimal, so a point that came from the

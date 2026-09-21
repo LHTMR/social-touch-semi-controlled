@@ -50,7 +50,7 @@ import numpy as np
 import pandas as pd
 
 # Same clustering as the tool, so the colours show what the morph actually saw.
-from interpolate_contact_points import (
+from surface_morph import (
     DEFAULT_CLUSTER_EPS, DEFAULT_MIN_CLUSTER, cluster_points,
 )
 
