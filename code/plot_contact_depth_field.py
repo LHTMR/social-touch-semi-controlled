@@ -6,14 +6,20 @@ needed to interpret itself in its file-level metadata.
 
 Usage
 -----
-    # step through interactively: left / right arrows, q to quit
-    python plot_contact_depth_field.py <block>_contact_depth_field_pca-xyz.parquet
+    # no arguments: every block, forearm underneath, 24 frames each, into
+    # plot/depth_field/<block-order-NN>/
+    python code/plot_contact_depth_field.py
 
-    # draw the forearm underneath for context (needs open3d)
-    python plot_contact_depth_field.py <parquet> --forearm <session>_forearm.ply
+    # just the two stroke blocks, more frames each
+    python code/plot_contact_depth_field.py \
+        data/.../blocks_rf_centered/*block-order-0[34]_contact_depth_field_pca-xyz.parquet \
+        --max-frames 60
 
-    # write one PNG per frame instead of opening a window
-    python plot_contact_depth_field.py <parquet> --save out/ --max-frames 50
+    # step through interactively instead: left / right arrows, q to quit
+    python code/plot_contact_depth_field.py --show
+
+    # no forearm underneath, elsewhere
+    python code/plot_contact_depth_field.py --no-forearm --save out/
 
 The interactive mode calls ``plt.show()``. Under the VS Code debugger that hangs
 on some backends — use ``--save`` there and open the PNGs.
@@ -24,12 +30,35 @@ Dependencies: pandas, pyarrow, matplotlib. Optional: open3d, for ``--forearm``.
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
+
+# --------------------------------------------------------------------------
+# Repo defaults. Added so the script runs in place with no arguments; the
+# unmodified original is in git at commit 2c45d86. Paths resolve from this
+# file, not the working directory, so it runs from anywhere.
+# --------------------------------------------------------------------------
+_REPO = Path(__file__).resolve().parents[1]
+_SESSION = _REPO / "data" / "2022-06-14_ST13-01"
+
+DEFAULT_PARQUET_DIR = _SESSION / "blocks_rf_centered"
+PARQUET_GLOB = "*_contact_depth_field_pca-xyz.parquet"
+DEFAULT_FOREARM = _SESSION / "2022-06-14_ST13-01_forearm.ply"
+DEFAULT_SAVE = _REPO / "plot" / "depth_field"
+# 96 frames ~= 3-4 s at the kinect rate. 24 was too few to see a stroke travel:
+# the contact centroid only moves ~8-25 mm in that time, versus 22-34 mm over 96.
+DEFAULT_MAX_FRAMES = 96
+
+
+def block_tag(path: Path) -> str:
+    """'block-order-03' out of a parquet name, for the per-block output folder."""
+    found = re.search(r"block-order-?(\d+)", path.name)
+    return f"block-order-{found.group(1)}" if found else path.stem
 
 
 # ---------------------------------------------------------------------------
@@ -134,18 +163,12 @@ def draw_frame(ax, table, frames, position, forearm, limits, vmax, space):
     )
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("parquet", type=Path)
-    ap.add_argument("--forearm", type=Path, default=None,
-                    help="reference forearm PLY, drawn as context")
-    ap.add_argument("--save", type=Path, default=None,
-                    help="write one PNG per frame into this directory")
-    ap.add_argument("--max-frames", type=int, default=None)
-    args = ap.parse_args()
-
-    table, meta = load_depth_field(args.parquet)
+def render(parquet: Path, args) -> None:
+    """Render one block. PNGs go to <save>/<block-order-NN>/."""
+    print(f"\n=== {block_tag(parquet)} ===")
+    table, meta = load_depth_field(parquet)
     forearm = load_forearm(args.forearm, meta) if args.forearm else None
+    save_dir = (args.save / block_tag(parquet)) if args.save else None
 
     # The contacting frames, in order. Frames absent here had no contact at all;
     # there is nothing to draw and nothing to interpolate. The contact patch
@@ -176,14 +199,15 @@ def main() -> None:
     )
     bar.set_label("penetration (mm)   [= -signed_depth_mm]", fontsize=9)
 
-    if args.save:
-        args.save.mkdir(parents=True, exist_ok=True)
+    if save_dir:
+        save_dir.mkdir(parents=True, exist_ok=True)
         for position in range(len(frames)):
             draw_frame(ax, table, frames, position, forearm, limits, vmax,
                        meta["coordinate_space"])
-            out = args.save / f"frame_{frames[position]:05d}.png"
+            out = save_dir / f"frame_{frames[position]:05d}.png"
             fig.savefig(out, dpi=110, bbox_inches="tight")
-        print(f"\nwrote {len(frames)} PNGs to {args.save}")
+        plt.close(fig)
+        print(f"wrote {len(frames)} PNGs to {save_dir}")
         return
 
     state = {"position": 0}
@@ -207,6 +231,37 @@ def main() -> None:
                meta["coordinate_space"])
     print("\nleft / right arrows to step, q to quit")
     plt.show()
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("parquet", type=Path, nargs="*",
+                    help="depth-field parquet(s) (default: every block in "
+                         f"{DEFAULT_PARQUET_DIR.name}/)")
+    ap.add_argument("--forearm", type=Path,
+                    default=DEFAULT_FOREARM if DEFAULT_FOREARM.exists() else None,
+                    help="reference forearm PLY, drawn as context")
+    ap.add_argument("--save", type=Path, default=DEFAULT_SAVE,
+                    help="write PNGs into <dir>/<block-order-NN>/")
+    ap.add_argument("--max-frames", type=int, default=DEFAULT_MAX_FRAMES)
+    ap.add_argument("--show", action="store_true",
+                    help="open the interactive stepper instead of writing PNGs")
+    ap.add_argument("--no-forearm", action="store_true",
+                    help="skip the forearm context cloud")
+    args = ap.parse_args()
+    if args.no_forearm:
+        args.forearm = None
+
+    parquets = args.parquet or sorted(DEFAULT_PARQUET_DIR.glob(PARQUET_GLOB))
+    if not parquets:
+        raise SystemExit(f"no {PARQUET_GLOB} found in {DEFAULT_PARQUET_DIR}")
+    if args.show:  # --save has a default now, so interactive needs an opt-in
+        args.save = None
+        parquets = parquets[:1]  # the stepper handles one block at a time
+
+    for parquet in parquets:
+        render(parquet, args)
 
 
 if __name__ == "__main__":

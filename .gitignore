@@ -5,3 +5,4 @@ output/
 *.egg-info/
 .ipynb_checkpoints/
 plot/videos/
+plot/depth_field/
