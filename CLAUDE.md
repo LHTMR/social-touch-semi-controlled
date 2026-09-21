@@ -31,7 +31,11 @@ surface** (kNN-graph geodesics), so no interpolated point leaves the forearm.
 
 ## Layout & what's committed
 ```
-code/    the tool + the two verification scripts        (committed)
+code/    surface_morph.py  = shared library: kNN graph, all-pairs geodesics,
+           clustering, contact-mode detection, cluster pairing, morph_paths().
+           Imported by interpolate_contact_points.py (morphs positions),
+           interpolate_depth_field.py (morphs per-vertex depth), and the
+           verification scripts. Put anything both tools need here.
 data/    2022-06-14_ST13-01/                            example session
            blocks/              4x *_merged_data.csv           <- what the tool reads
            blocks_rf_centered/  4x *_merged_data_pca-xyz.csv   + *_contact_depth_field_pca-xyz.parquet
@@ -127,6 +131,18 @@ $PY code/interpolate_video.py    # plot/videos/*.mp4  (3D evolution, original vs
     (spread up to 7 mm). Reading it as one-value-per-vertex silently takes whichever
     row comes last — the viewer overplots them. Aggregate explicitly (e.g. `min`)
     before treating `vertex_id` as a key.
+- **Depth field interpolation** (`interpolate_depth_field.py`): the depth field has the
+  same holes as `contact_points` — `contact_depth`/`contact_area` sit on exactly the
+  3.0% of rows carrying a `frame_index`, gaps of only 33/34 rows. It reuses the same
+  morph; `morph_paths()` returns paths whose `path[0]` is the source vertex and
+  `path[-1]` the target, so depth blends linearly between the endpoints while the
+  position follows the geodesic. Needs the **deduplicated** `<session>_forearm.ply`
+  (1807 verts), not `_unified_registered.ply`. Its gap rule is exact rather than
+  heuristic — adjacent kinect frames are `Δframe_index == 1`, no `--max-gap` guess —
+  and on all 4 blocks it reproduces the contact tool's span structure exactly
+  (28515/147, 56361/156, 89399/24, 32007/23). Duplicate `(frame, vertex)` rows are
+  reduced by `--aggregate` (default `min` = deepest), which makes the field's per-frame
+  peak equal the CSV's `contact_depth` to 0.000000 mm. ~213 MB for 4 blocks.
 - **Output** = 2 columns: `time_nerve` (dense, for aligning to the nerve signal) +
   `contact_points_interpolated`. Same row count as input. Anchor (measured) rows keep
   the **original** contacts; only interpolated in-between rows are snapped to the cloud.
