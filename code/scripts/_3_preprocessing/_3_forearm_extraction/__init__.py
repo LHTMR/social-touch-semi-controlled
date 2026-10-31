@@ -7,3 +7,4 @@ from .clean_forearm_pointcloud import clean_forearm_pointcloud
 from .curate_forearm_pointcloud import curate_forearm_pointcloud
 from .define_forearm_mesh import define_forearm_mesh
 from .apply_registration_transform import apply_registration_transform
+from .define_manual_label_ref_point import define_manual_label_ref_point

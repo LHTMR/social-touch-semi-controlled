@@ -42,10 +42,12 @@ from _5_postprocessing import (
     calibrate_pca_xyz,
     project_contacts_onto_forearm,
     center_on_receptive_field,
+    export_manual_label_ref_point,
     deduplicate_forearm_ply,
     deduplicate_contact_points_csv,
     monitor_deduplicate_xy_interactive,
 )
+from _5_postprocessing.set_xyz_reference_from_gestures import CalibrationConfig
 from _4_merging.aggregate_blocks_session import aggregate_session_blocks
 
 # --- Post-Processing Sub-Flows ---
@@ -234,6 +236,23 @@ def aggregate_session_blocks_flow(
     )
 
 
+@flow(name="export_manual_label_ref_point")
+def export_manual_label_ref_point_flow(
+    session_configs: List[KinectConfig],
+    pca_calibration_path: Path,
+    rf_origin_path: Path,
+    forearm_ply_path: Path,
+    output_path: Path,
+    force_processing: bool = False,
+) -> Path:
+    """Export the manually labelled forearm reference point in the RF-centred frame."""
+    print(f"[{output_path.parent.name}] Exporting the manual forearm reference point...")
+    return export_manual_label_ref_point(
+        session_configs, pca_calibration_path, rf_origin_path, forearm_ply_path, output_path,
+        force_processing=force_processing,
+    )
+
+
 # --- Worker Flow ---
 
 # @flow(name="Run Single Session Postprocessing")
@@ -360,6 +379,19 @@ def run_single_session_postprocessing(
                     else None,
             },
             "outputs": ["aggregated_file"]
+        },
+        # Step 7: Export the manually labelled forearm reference point (black dot)
+        {
+            "name": "export_manual_label_ref_point",
+            "func": export_manual_label_ref_point_flow,
+            "params": lambda: {
+                "session_configs": context.get("session_configs"),
+                "pca_calibration_path": context.get("pca_output_dir") / CalibrationConfig.output_json_name,
+                "rf_origin_path": session_output_dir / "rf_center_origin.json",
+                "forearm_ply_path": session_output_dir / "forearm_rf_centered" / context.get("pca_forearm").name,
+                "output_path": session_output_dir / "manual_label_ref_point.json",
+            },
+            "outputs": ["manual_label_ref_point"]
         },
     ]
 

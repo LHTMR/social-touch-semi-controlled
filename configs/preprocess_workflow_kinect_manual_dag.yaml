@@ -22,6 +22,14 @@ tasks:
     options:
       force_processing: false
 
+  define_manual_label_ref_point:
+    enabled: true
+    description: "Manually draw a square around the black reference dot on the touch
+      receiver's forearm (once per session, valid for all blocks)."
+    depends_on: []
+    options:
+      force_processing: false
+
   assign_hand_model_metadata:
     enabled: true
     description: "Manually select the position of the sticks on an arbitrary standard

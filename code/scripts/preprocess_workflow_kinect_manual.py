@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+from typing import Optional
 from prefect import flow
 import utils.path_tools as path_tools
 from utils import DagConfigHandler
@@ -7,6 +8,9 @@ from utils import DagConfigHandler
 from primary_processing import (
     KinectConfigFileHandler,
     KinectConfig,
+)
+from preprocessing.forearm_extraction.data_access.manual_label_ref_point_filehandler import (
+    ManualLabelRefPointFileHandler,
 )
 
 from utils.pipeline.session_config_resolver import resolve_session_configs
@@ -22,6 +26,10 @@ from _3_preprocessing._2_hand_tracking import (
     define_hand_mask,
     curate_hamer_hand_models,
     define_hand_tracking_roi,
+)
+
+from _3_preprocessing._3_forearm_extraction import (
+    define_manual_label_ref_point
 )
 
 from _3_preprocessing._5_led_tracking import (
@@ -47,6 +55,29 @@ def prepare_led_tracking(
     roi_metadata_path = output_dir / (name_baseline + "_roi_metadata.json")
     define_led_roi(rgb_video_path, roi_metadata_path, force_processing=force_processing)
     return True
+
+
+@flow(name="Manual: Label Forearm Reference Point")
+def define_manual_label_ref_point_flow(
+    rgb_video_path: Path,
+    source_video_path: Path,
+    session_id: str,
+    block_id: str,
+    session_processed_output_dir: Path,
+    *,
+    force_processing: bool = False
+) -> Optional[Path]:
+    """Draw a square around the black reference dot on the receiver's forearm (once per session)."""
+    print(f"[{session_id}] Labelling the forearm reference point (black dot)...")
+    output_path = ManualLabelRefPointFileHandler.default_path(session_processed_output_dir, session_id)
+    return define_manual_label_ref_point(
+        rgb_video_path,
+        source_video_path,
+        session_id,
+        block_id,
+        output_path,
+        force_processing=force_processing
+    )
 
 
 @flow(name="Manual: Define Hand Tracking ROI")
@@ -313,6 +344,20 @@ def run_single_session_pipeline(
                 force_processing=force
             )
             dag_handler.mark_completed('prepare_led_tracking')
+
+        # 1b. Forearm reference point (black dot) — one label per session, valid for all blocks
+        if dag_handler.can_run('define_manual_label_ref_point'):
+            print(f"[{block_name}] ==> Running task: define_manual_label_ref_point")
+            force = dag_handler.get_task_options('define_manual_label_ref_point').get('force_processing', False)
+            define_manual_label_ref_point_flow(
+                rgb_video_path=rgb_video_path,
+                source_video_path=config.source_video,
+                session_id=config.session_id,
+                block_id=config.block_id,
+                session_processed_output_dir=config.session_processed_output_dir,
+                force_processing=force
+            )
+            dag_handler.mark_completed('define_manual_label_ref_point')
 
         # 2. Hand Model
         if dag_handler.can_run('assign_hand_model_metadata'):

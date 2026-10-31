@@ -64,3 +64,12 @@ tasks:
     options:
       force_processing: false
     depends_on: [center_on_receptive_field]
+
+  # Step 7: Export the manually labelled forearm reference point (black dot) into the
+  # RF-centred frame -> <session>/manual_label_ref_point.json. Needs the manual task
+  # define_manual_label_ref_point; shows FAILURE for sessions that were not labelled.
+  export_manual_label_ref_point:
+    enabled: true
+    options:
+      force_processing: false
+    depends_on: [center_on_receptive_field]
